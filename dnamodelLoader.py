@@ -12,6 +12,7 @@ from MDAnalysis import Universe
 
 def listTrajectories(dir):
     trajList=[]
+    formats=[]
     for root, dirs, filenames in os.walk(dir):
         trajectory=""
         topology=""
@@ -19,13 +20,14 @@ def listTrajectories(dir):
             filename, fileExtension = os.path.splitext(f)
             if str.lower(fileExtension) == ".trj" or str.lower(fileExtension)== ".mdcrd" or  str.lower(fileExtension)== ".netcdf":
                 trajectory = os.path.join(root, f)
+                trajectoryFormat = str.upper(fileExtension.split(os.extsep)[1])
             elif str.lower(fileExtension) == ".top" or str.lower(fileExtension)== ".prmtop" or str.lower(fileExtension)== ".pdb": 
                 topology = os.path.join(root, f)
+                topologyFormat = str.upper(fileExtension.split(os.extsep)[1])
         if trajectory and topology:
             trajList.append((topology, trajectory))
-    return trajList
-
-
+            formats.append((trajectoryFormat, topologyFormat))
+    return (trajList, formats)
 
     
 class numpy_float32_adapter(object):
@@ -49,7 +51,7 @@ def nthLetter(cont):
     return str(chr(ord('A') + cont))
     
 def simulationInsert(con, totalTime, timeStep, samplingTime, totalSnapsNumber, description):
-    sql_insert_simulation="INSERT INTO dnamodeltest.simulation (totalTime, timeStep, samplingTime, totalSnapsNumber, description) VALUES (%s, %s, %s, %s, %s) RETURNING simulationId;"
+    sql_insert_simulation="INSERT INTO dnamodel.simulation (totalTime, timeStep, samplingTime, totalSnapsNumber, description) VALUES (%s, %s, %s, %s, %s) RETURNING simulationId;"
     cur = con.cursor()
     cur.execute(sql_insert_simulation, (totalTime, timeStep, samplingTime, totalSnapsNumber, description))
     simulationId = cur.fetchone()[0]
@@ -57,7 +59,7 @@ def simulationInsert(con, totalTime, timeStep, samplingTime, totalSnapsNumber, d
     return simulationId
 
 def referenceInsert(con, simulationId, pdbCode, chainCode):
-    sql_insert_simulationReference="INSERT INTO dnamodeltest.reference (simulationId, pdbCode, chainCode) VALUES (%s, %s, %s) RETURNING referenceId;"
+    sql_insert_simulationReference="INSERT INTO dnamodel.reference (simulationId, pdbCode, chainCode) VALUES (%s, %s, %s) RETURNING referenceId;"
     cur = con.cursor()
     cur.execute(sql_insert_simulationReference, (simulationId, pdbCode, chainCode))
     referenceId = cur.fetchone()[0]
@@ -65,7 +67,7 @@ def referenceInsert(con, simulationId, pdbCode, chainCode):
     return referenceId
 
 def snapshotInsert(con, simulationId, snapNumber):
-    sql_insert_snapshot="INSERT INTO dnamodeltest.snapshot (simulationId, snapNumber) VALUES (%s, %s) RETURNING snapshotId;"
+    sql_insert_snapshot="INSERT INTO dnamodel.snapshot (simulationId, snapNumber) VALUES (%s, %s) RETURNING snapshotId;"
     cur = con.cursor()
     cur.execute(sql_insert_snapshot, (simulationId, snapNumber))
     snapshotId = cur.fetchone()[0]
@@ -73,7 +75,7 @@ def snapshotInsert(con, simulationId, snapNumber):
     return snapshotId
 
 def topologyInsert(con, simulationId, atomNum, atomName, atomType, residueCode, residueNumber, chainCode, description):
-    sql_insert_topology="INSERT INTO dnamodeltest.topology (simulationId, atomNum, atomName, atomType, residueNum, residueCode, chainCode, description) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING topologyId;"
+    sql_insert_topology="INSERT INTO dnamodel.topology (simulationId, atomNum, atomName, atomType, residueNum, residueCode, chainCode, description) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING topologyId;"
     cur = con.cursor()
     cur.execute(sql_insert_topology, (simulationId, atomNum, adapt(atomName), adapt(atomType), residueNumber, adapt(residueCode), adapt(chainCode), adapt(description)))
     topologyId = cur.fetchone()[0]
@@ -81,7 +83,7 @@ def topologyInsert(con, simulationId, atomNum, atomName, atomType, residueCode, 
     return topologyId
 
 def atomInsert(con, topologyId, snapshotId, x, y, z):
-    sql_insert_atom="INSERT INTO dnamodeltest.atom VALUES (%s, %s, %s, %s, %s);"
+    sql_insert_atom="INSERT INTO dnamodel.atom VALUES (%s, %s, %s, %s, %s);"
     cur = con.cursor()
     cur.execute(sql_insert_atom, (con, topologyId, snapshotId, x, y, z))
     cur.close()
@@ -89,8 +91,8 @@ def atomInsert(con, topologyId, snapshotId, x, y, z):
 def trajectoryToDB(uni, con, simulationId):
     cur = con.cursor()
     firstSnapshot = True
-    sqlAtom= "INSERT INTO dnamodeltest.atom VALUES "
-    topologyBuffer = "INSERT INTO dnamodeltest.topology VALUES " 
+    sqlAtom= "INSERT INTO dnamodel.atom VALUES "
+    topologyBuffer = "INSERT INTO dnamodel.topology VALUES " 
     atNumTopId = {}
     for ts in uni.trajectory:
         snapshotId = snapshotInsert(con, simulationId, ts.frame)
@@ -157,34 +159,43 @@ def main(dir):
  
     try:
         #con = psycopg2.connect(database='postgres', user='postgres', host='localhost', port=5432, password='post')
-        con = psycopg2.connect(database='postgres', user='postgres', host='localhost', port=5433, password='post')
+        con = psycopg2.connect(database='dnamodel', user='dnamodel', host='localhost', port=5432, password='post')
         #con = psycopg2.connect(database='postgres', user='postgres', host='mmb00.local', port=5433, password='post')
     except psycopg2.DatabaseError, e:
         print 'Error %s' % e    
         sys.exit(1)
     
-    trajList = listTrajectories(dir)
+    trajList, formats = listTrajectories(dir)
     totalTrajNumber = len(trajList)
+    trajFormat = formats[0][0]
+    topoFormat = formats[0][1]
     cont = 0
+
+    if trajFormat == "NETCDF":
+        trajFormat = "NCDF"
+
     for topologyPath, trajectoryPath in trajList:
         cont +=1
-        print "Trajectory "+str(cont)+"/"+str(totalTrajNumber)+" "+topologyPath
+	print "Trajectory "+str(cont)+"/"+str(totalTrajNumber)+" "+topologyPath
         #canviar parametres simulationId
         simulationId = simulationInsert(con, 225000, 1, 1, 225000, topologyPath+" "+trajectoryPath)
         referenceInsert(con, simulationId, 'DNA ', 'X')    
+
+
         try:
             #uniTraj = Universe(topologyPath, format='PRMTOP')
-            uniTraj = Universe(topologyPath)
+            uniTraj = Universe(topologyPath, format=topoFormat)
         except:
             print "Error: Could not load topology file"
             return 100
                
         try:
-	    filename, fileExtension = os.path.splitext(trajectoryPath)
-	    if str.lower(fileExtension)== ".netcdf":
-            	uniTraj.load_new(trajectoryPath, format='NCDF')
-	    else:
-            	uniTraj.load_new(trajectoryPath)
+	    #filename, fileExtension = os.path.splitext(trajectoryPath)
+	    #if str.lower(fileExtension)== ".netcdf":
+            # 	uniTraj.load_new(trajectoryPath, format='NCDF')
+	    #else:
+            #	uniTraj.load_new(trajectoryPath)
+            uniTraj.load_new(trajectoryPath, format=trajFormat)
         except:
             print "Error: Could not load trajectory file"
             return 100
