@@ -74,10 +74,12 @@ def snapshotInsert(con, simulationId, snapNumber):
     cur.close()
     return snapshotId
 
-def topologyInsert(con, simulationId, atomNum, atomName, atomType, residueCode, residueNumber, chainCode, description):
-    sql_insert_topology="INSERT INTO dnamodel.topology (simulationId, atomNum, atomName, atomType, residueNum, residueCode, chainCode, description) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING topologyId;"
+def topologyInsert(con, simulationId, atomNum, atomName, atomType, residueCode, residueNumber, chainCode): #, description):
+#    sql_insert_topology="INSERT INTO dnamodel.topology (simulationId, atomNum, atomName, atomType, residueNum, residueCode, chainCode, description) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING topologyId;"
+    sql_insert_topology="INSERT INTO dnamodel.topology (simulationId, atomNum, atomName, atomType, residueNum, residueCode, chainCode) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING topologyId;"
     cur = con.cursor()
-    cur.execute(sql_insert_topology, (simulationId, atomNum, adapt(atomName), adapt(atomType), residueNumber, adapt(residueCode), adapt(chainCode), adapt(description)))
+#    cur.execute(sql_insert_topology, (simulationId, atomNum, adapt(atomName), adapt(atomType), residueNumber, adapt(residueCode), adapt(chainCode), adapt(description)))
+    cur.execute(sql_insert_topology, (simulationId, atomNum, adapt(atomName), adapt(atomType), residueNumber, adapt(residueCode), adapt(chainCode)))
     topologyId = cur.fetchone()[0]
     cur.close()
     return topologyId
@@ -128,7 +130,8 @@ def trajectoryToDB(uni, con, simulationId):
                 
                 ###Canviar
                 #topologyBuffer = '%s (%s, %s, %s, %s, %s, %s, %s),' % (topologyBuffer, simulationId, at.number, adapt(at.name), adapt(at.type), adapt(at.resname), currentResidue,  adapt(currentChain))
-                topologyId = topologyInsert(con, simulationId, at.number, adapt(at.name), adapt(at.type), adapt(at.resname), currentResidue, adapt(currentChain), "")
+                #topologyId = topologyInsert(con, simulationId, at.number, adapt(at.name), adapt(at.type), adapt(at.resname), currentResidue, adapt(currentChain), "")
+                topologyId = topologyInsert(con, simulationId, at.number, adapt(at.name), adapt(at.type), adapt(at.resname), currentResidue, adapt(currentChain))
                 atNumTopId[str(at.number)]=topologyId
                 atomBuffer = '%s (%s, %s, %s, %s, %s),' % (atomBuffer, topologyId, snapshotId, at.position[0], at.position[1], at.position[2])
                 #print str(simulationId) +' ' + str(at.number) +' ' + at.name +' ' + at.type+' ' + at.resname +' ' + str(currentResidue)+ ' ' + currentChain + ''
