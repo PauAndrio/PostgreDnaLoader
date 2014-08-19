@@ -29,7 +29,7 @@ CREATE  TABLE IF NOT EXISTS dnamodel.simulation (
   totalSnapsNumber INT NULL ,
   description TEXT NULL ,
   PRIMARY KEY (simulationId)
-WITH (FILLFACTOR=100));
+WITH (FILLFACTOR=95));
 
 -- -----------------------------------------------------
 -- Table dnamodel.reference
