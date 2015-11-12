@@ -54,7 +54,17 @@ BEGIN
 	ss.snapshotid = at.snapshotid and 
 	sm.simulationid = tp.simulationid and 
 	tp.topologyid = at.topologyid and 
-	tp.residueNum in (1, 20);	
+	tp.residueNum in (1, 20);
+	
+	-- Get all the alpha carbons of the first snapshot across all the DB
+	select at.x, at.y, at.z  
+	from db.atom as at, db.topology as tp, db.snapshot as ss, db.simulation as sm where
+	ss.snapshotid = 1  and
+	sm.simulationid = ss.simulationid and 
+	ss.snapshotid = at.snapshotid and 
+	sm.simulationid = tp.simulationid and 
+	tp.topologyid = at.topologyid and
+	tp.atomName = 'CA';
 
 END $$;
 
